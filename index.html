@@ -64,6 +64,29 @@
             color: #aaa;
         }
 
+        .sound-indicator {
+            display: inline-block;
+            background: rgba(241, 196, 15, 0.1);
+            padding: 4px 16px;
+            border-radius: 30px;
+            font-size: 0.65rem;
+            color: #f1c40f;
+            border: 1px solid rgba(241, 196, 15, 0.15);
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .sound-indicator:hover {
+            background: rgba(241, 196, 15, 0.2);
+        }
+
+        .sound-indicator.muted {
+            opacity: 0.3;
+            color: #666;
+            border-color: #333;
+        }
+
         .grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -202,17 +225,23 @@
             box-shadow: 0 0px 0 #b38f0a;
         }
 
+        .btn-danger {
+            background: #c0392b;
+            border-color: #e74c3c;
+            box-shadow: 0 5px 0 #78281f;
+        }
+
+        .btn-danger:hover {
+            background: #e74c3c;
+            color: #fff;
+        }
+
         .counter {
             font-size: 0.75rem;
             opacity: 0.5;
             margin-top: 14px;
             letter-spacing: 1px;
             color: #aaa;
-        }
-
-        .hand-icon {
-            font-size: 1.2rem;
-            margin-right: 6px;
         }
 
         .fate-badge {
@@ -226,7 +255,6 @@
             margin-top: 4px;
         }
 
-        /* Scrollable commentary for long text */
         .commentary-box span {
             display: flex;
             align-items: center;
@@ -252,6 +280,9 @@
     </div>
     <div class="app-subtitle">✦ The 9 Doors of Fate ✦</div>
 
+    <!-- Sound Toggle -->
+    <div class="sound-indicator" id="soundToggle">🔊 Sound: ON</div>
+
     <!-- Door Grid -->
     <div class="grid" id="doorGrid"></div>
 
@@ -276,46 +307,196 @@
 <script>
     (function() {
         // ============================================================
-        //  THE 9 FATES – Emoji + Playful Commentary
+        //  THE 9 FATES – Emoji + Playful Commentary + Sound Type
         // ============================================================
         const FATES = [
             { 
                 emoji: '🪙', 
-                comment: 'Prince Charming? No, that\'s your bank account sweating. Buy a coffee... or a small island.' 
+                comment: 'Prince Charming? No, that\'s your bank account sweating. Buy a coffee... or a small island.',
+                sound: 'happy'  // 🎉
             },
             { 
                 emoji: '✈️', 
-                comment: 'The universe says "GO." Your boss says "STAY." Start packing an imaginary bag.' 
+                comment: 'The universe says "GO." Your boss says "STAY." Start packing an imaginary bag.',
+                sound: 'happy'
             },
             { 
                 emoji: '💸', 
-                comment: 'Cha-ching! That\'s the sound of your bills laughing. Go buy a lottery ticket NOW.' 
+                comment: 'Cha-ching! That\'s the sound of your bills laughing. Go buy a lottery ticket NOW.',
+                sound: 'happy'
             },
             { 
                 emoji: '👩', 
-                comment: 'Watch out! Your charm level just hit 100. Try not to break the mirrors.' 
+                comment: 'Watch out! Your charm level just hit 100. Try not to break the mirrors.',
+                sound: 'happy'
             },
             { 
                 emoji: '👮', 
-                comment: 'Uh oh. The fun police are here. Did you forget your chores? We saw nothing.' 
+                comment: 'Uh oh. The fun police are here. Did you forget your chores? We saw nothing.',
+                sound: 'donkey'  // 😭
             },
             { 
                 emoji: '🧌', 
-                comment: 'Oof. Goblin energy is strong. Hide your snacks and lock the door. Just kidding... mostly.' 
+                comment: 'Oof. Goblin energy is strong. Hide your snacks and lock the door. Just kidding... mostly.',
+                sound: 'donkey'
             },
             { 
                 emoji: '👁️‍🗨️', 
-                comment: 'Awkward! Someone\'s watching. Embrace the nudist colony of life... or put on a shirt.' 
+                comment: 'Awkward! Someone\'s watching. Embrace the nudist colony of life... or put on a shirt.',
+                sound: 'donkey'
             },
             { 
                 emoji: '🕉️', 
-                comment: 'The ancestors have your back. You\'re too powerful for Mondays. Use this wisely.' 
+                comment: 'The ancestors have your back. You\'re too powerful for Mondays. Use this wisely.',
+                sound: 'happy'
             },
             { 
                 emoji: '🎭', 
-                comment: 'Drama! You\'re the main character today. Own it, cry, or dance. We support you.' 
+                comment: 'Drama! You\'re the main character today. Own it, cry, or dance. We support you.',
+                sound: 'happy'
             }
         ];
+
+        // ============================================================
+        //  AUDIO ENGINE – Web Audio API (no external files needed!)
+        // ============================================================
+        let audioCtx = null;
+        let soundEnabled = true;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // --- Click Sound (short blip) ---
+        function playClickSound() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.value = 800;
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + 0.08);
+            } catch (e) { /* silent fail */ }
+        }
+
+        // --- Happy Sound (ascending chime) ---
+        function playHappySound() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                const notes = [523, 659, 784]; // C5, E5, G5
+                notes.forEach((freq, i) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.frequency.value = freq;
+                    osc.type = 'sine';
+                    const startTime = audioCtx.currentTime + i * 0.1;
+                    gain.gain.setValueAtTime(0.12, startTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.15);
+                    osc.start(startTime);
+                    osc.stop(startTime + 0.15);
+                });
+                // Add a little "sparkle" noise
+                const bufferSize = audioCtx.sampleRate * 0.05;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * 0.03;
+                }
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+                const noiseGain = audioCtx.createGain();
+                noiseGain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                noiseGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+                noise.connect(noiseGain);
+                noiseGain.connect(audioCtx.destination);
+                noise.start(audioCtx.currentTime + 0.2);
+            } catch (e) { /* silent fail */ }
+        }
+
+        // --- Donkey Sound (hee-haw!) ---
+        function playDonkeySound() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                // "Hee" part - rising pitch
+                const osc1 = audioCtx.createOscillator();
+                const gain1 = audioCtx.createGain();
+                osc1.connect(gain1);
+                gain1.connect(audioCtx.destination);
+                osc1.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc1.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.15);
+                osc1.type = 'sawtooth';
+                gain1.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+                osc1.start(audioCtx.currentTime);
+                osc1.stop(audioCtx.currentTime + 0.2);
+
+                // "Haw" part - falling pitch with vibrato
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+                osc2.frequency.setValueAtTime(500, audioCtx.currentTime + 0.2);
+                osc2.frequency.linearRampToValueAtTime(250, audioCtx.currentTime + 0.5);
+                osc2.type = 'sawtooth';
+                // Add vibrato
+                const vibrato = audioCtx.createOscillator();
+                const vibratoGain = audioCtx.createGain();
+                vibrato.connect(vibratoGain);
+                vibratoGain.connect(osc2.frequency);
+                vibrato.frequency.value = 6;
+                vibratoGain.gain.value = 30;
+                vibrato.start(audioCtx.currentTime + 0.2);
+                vibrato.stop(audioCtx.currentTime + 0.5);
+
+                gain2.gain.setValueAtTime(0.12, audioCtx.currentTime + 0.2);
+                gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+                osc2.start(audioCtx.currentTime + 0.2);
+                osc2.stop(audioCtx.currentTime + 0.6);
+
+                // Add a little "bray" noise
+                const bufferSize = audioCtx.sampleRate * 0.1;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * 0.04;
+                }
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+                const noiseGain = audioCtx.createGain();
+                noiseGain.gain.setValueAtTime(0.08, audioCtx.currentTime + 0.3);
+                noiseGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+                noise.connect(noiseGain);
+                noiseGain.connect(audioCtx.destination);
+                noise.start(audioCtx.currentTime + 0.3);
+            } catch (e) { /* silent fail */ }
+        }
+
+        // --- Play sound based on type ---
+        function playFateSound(type) {
+            playClickSound(); // always click first
+            setTimeout(() => {
+                if (type === 'happy') {
+                    playHappySound();
+                } else if (type === 'donkey') {
+                    playDonkeySound();
+                }
+            }, 120);
+        }
 
         // ============================================================
         //  DOM REFS
@@ -326,6 +507,7 @@
         const fateBadge = document.getElementById('fateBadge');
         const resetBtn = document.getElementById('resetGame');
         const shuffleBtn = document.getElementById('shuffleDoors');
+        const soundToggle = document.getElementById('soundToggle');
 
         // ============================================================
         //  STATE
@@ -411,16 +593,21 @@
             // Guard conditions
             if (door.dataset.revealed === 'true') {
                 setCommentary('🙄', 'You already opened this one. Try another door!');
+                playClickSound();
                 return;
             }
             if (!isGameActive) {
                 setCommentary('🏁', 'All doors are open! Hit "New Fate" to play again.');
+                playClickSound();
                 return;
             }
             if (isKnocking) return;
 
             const index = parseInt(door.dataset.index);
             const fate = currentFates[index];
+
+            // --- PLAY CLICK SOUND ---
+            playClickSound();
 
             // --- KNOCKING PHASE ---
             isKnocking = true;
@@ -438,6 +625,9 @@
                 revealedCount++;
                 updateCounter();
 
+                // --- PLAY FATE SOUND (happy or donkey) ---
+                playFateSound(fate.sound);
+
                 // Show fate commentary
                 setCommentary(fate.emoji, fate.comment);
 
@@ -445,6 +635,9 @@
                 if (revealedCount === 9) {
                     isGameActive = false;
                     setCommentary('🏆', 'ALL DOORS OPEN! You have seen all fates. The Prince bows to you. Reset for a new destiny.');
+                    // Play happy sound for completion
+                    setTimeout(() => playHappySound(), 300);
+                    setTimeout(() => playHappySound(), 600);
                 }
 
                 isKnocking = false;
@@ -456,12 +649,15 @@
         //  RESET / SHUFFLE
         // ============================================================
         function resetGame() {
+            if (isKnocking) return;
             renderDoors();
             setCommentary('🔄', 'Fates have been reshuffled. The Prince awaits your choice...');
+            playClickSound();
         }
 
         function shuffleDoors() {
             if (isKnocking) return;
+            playClickSound();
             // Only shuffle unrevealed doors (if game still active)
             if (!isGameActive) {
                 resetGame();
@@ -512,6 +708,19 @@
         }
 
         // ============================================================
+        //  SOUND TOGGLE
+        // ============================================================
+        soundToggle.addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            soundToggle.textContent = soundEnabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
+            soundToggle.classList.toggle('muted', !soundEnabled);
+            if (soundEnabled) {
+                playClickSound();
+                setTimeout(() => playHappySound(), 150);
+            }
+        });
+
+        // ============================================================
         //  INIT
         // ============================================================
         renderDoors();
@@ -520,14 +729,21 @@
         resetBtn.addEventListener('click', resetGame);
         shuffleBtn.addEventListener('click', shuffleDoors);
 
-        // Keyboard shortcut: 'R' for reset
+        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.key === 'r' || e.key === 'R') resetGame();
             if (e.key === 's' || e.key === 'S') shuffleDoors();
+            if (e.key === 'm' || e.key === 'M') soundToggle.click();
         });
 
         console.log('👑 Meeting Your Days Luck – 9 Doors of Fate loaded!');
-        console.log('💡 Tip: Press "R" to reset, "S" to shuffle.');
+        console.log('💡 Tips:');
+        console.log('   "R" = Reset  |  "S" = Shuffle  |  "M" = Mute');
+        console.log('🎵 Sounds: Click 🔘 | Happy 🎉 | Donkey 😭');
+
+        // Auto-init audio on first user interaction
+        document.addEventListener('click', () => initAudio(), { once: true });
+        document.addEventListener('touchstart', () => initAudio(), { once: true });
     })();
 </script>
 
